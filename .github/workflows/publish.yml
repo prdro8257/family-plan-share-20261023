@@ -1,0 +1,51 @@
+name: Publish encrypted seven-day share
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  schedule:
+    - cron: '17 * * * *'
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: pages
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare current or expired site
+        id: prepare
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          python3 - <<'PY'
+          import os, json, datetime, pathlib, shutil
+          pathlib.Path('site').mkdir(exist_ok=True)
+          for source in pathlib.Path('.').glob('*.html'):
+              shutil.copy2(source, pathlib.Path('site') / source.name)
+          deadline = datetime.datetime.fromisoformat(json.loads(pathlib.Path('expires.json').read_text())['expires'].replace('Z', '+00:00'))
+          expired = datetime.datetime.now(datetime.timezone.utc) >= deadline
+          if expired:
+              notice = '<!doctype html><html lang="zh"><meta charset="utf-8"><meta name="robots" content="noindex,nofollow"><meta name="viewport" content="width=device-width,initial-scale=1"><title>分享已到期</title><body style="font-family:sans-serif;padding:48px"><h1>此分享链接已到期</h1><p>如需继续查看，请联系分享人。</p></body></html>'
+              for page in pathlib.Path('site').glob('*.html'):
+                  page.write_text(notice, encoding='utf-8')
+          should = expired or os.environ['EVENT_NAME'] != 'schedule'
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+              f.write('publish=' + str(should).lower() + '\n')
+          PY
+      - uses: actions/configure-pages@v5
+        if: steps.prepare.outputs.publish == 'true'
+      - uses: actions/upload-pages-artifact@v3
+        if: steps.prepare.outputs.publish == 'true'
+        with:
+          path: site
+      - uses: actions/deploy-pages@v5
+        if: steps.prepare.outputs.publish == 'true'
+        id: deployment
