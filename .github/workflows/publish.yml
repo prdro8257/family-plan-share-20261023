@@ -1,4 +1,4 @@
-name: Publish encrypted seven-day share
+name: Publish encrypted family plan share
 on:
   push:
     branches: [main]
@@ -28,8 +28,11 @@ jobs:
           python3 - <<'PY'
           import os, json, datetime, pathlib, shutil
           pathlib.Path('site').mkdir(exist_ok=True)
-          for source in pathlib.Path('.').glob('*.html'):
-              shutil.copy2(source, pathlib.Path('site') / source.name)
+          public_files = ('index.html', '弟弟保障方案.html', '弟弟方案更新版.html', 'robots.txt', '.nojekyll')
+          for name in public_files:
+              source = pathlib.Path(name)
+              if source.is_file():
+                  shutil.copy2(source, pathlib.Path('site') / name)
           deadline = datetime.datetime.fromisoformat(json.loads(pathlib.Path('expires.json').read_text())['expires'].replace('Z', '+00:00'))
           expired = datetime.datetime.now(datetime.timezone.utc) >= deadline
           if expired:
